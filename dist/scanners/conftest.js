@@ -35,74 +35,23 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConftestScanner = void 0;
 const core = __importStar(require("@actions/core"));
-const child_process_1 = require("child_process");
-const util_1 = require("util");
+const exec = __importStar(require("@actions/exec"));
 const fs = __importStar(require("fs"));
-const path = __importStar(require("path"));
-const execAsync = (0, util_1.promisify)(child_process_1.exec);
 class ConftestScanner {
     async scan(terraformPath, policyPath, version, additionalArgs) {
         try {
             core.info(`Running Conftest scan on: ${terraformPath} with policies: ${policyPath}`);
             await this.ensureConftestInstalled(version);
             await this.ensureTerraformInstalled();
-            const jsonPath = await this.convertTerraformToJson(terraformPath);
-            const args = additionalArgs ? ` ${additionalArgs}` : '';
-            const isJsonFile = jsonPath.endsWith('.json');
-            const parser = isJsonFile ? 'json' : 'hcl2';
-            const absoluteJsonPath = path.resolve(jsonPath);
-            const absolutePolicyPath = path.resolve(policyPath);
-            const command = `conftest test ${absoluteJsonPath} --policy ${absolutePolicyPath} --parser ${parser} --output json${args}`;
-            core.info(`Executing: ${command}`);
-            try {
-                core.info('Testing conftest --version...');
-                const { stdout: versionOutput } = await execAsync('conftest --version');
-                core.info(`Conftest version: ${versionOutput.trim()}`);
-            }
-            catch (error) {
-                core.error(`Conftest version test failed: ${error}`);
-            }
-            try {
-                core.info('Testing file existence...');
-                const { stdout: lsOutput } = await execAsync(`ls -la ${absoluteJsonPath}`);
-                core.info(`JSON file details: ${lsOutput.trim()}`);
-            }
-            catch (error) {
-                core.error(`File existence test failed: ${error}`);
-            }
-            try {
-                core.info('Testing policy directory...');
-                const { stdout: policyLsOutput } = await execAsync(`ls -la ${absolutePolicyPath}`);
-                core.info(`Policy directory contents: ${policyLsOutput.trim()}`);
-            }
-            catch (error) {
-                core.error(`Policy directory test failed: ${error}`);
-            }
-            try {
-                const { stdout: whichOutput } = await execAsync('which conftest');
-                core.info(`Conftest binary location: ${whichOutput.trim()}`);
-                const { stdout: lsOutput } = await execAsync(`ls -la ${whichOutput.trim()}`);
-                core.info(`Conftest binary permissions: ${lsOutput.trim()}`);
-            }
-            catch (error) {
-                core.error(`Conftest binary check failed: ${error}`);
-            }
-            try {
-                const { stdout, stderr } = await execAsync(command);
-                if (stderr) {
-                    core.warning(`Conftest stderr: ${stderr}`);
-                }
-                core.info(`Conftest stdout: ${stdout}`);
-                const results = JSON.parse(stdout);
-                return this.parseConftestResults(results);
-            }
-            catch (execError) {
-                core.error(`Conftest execution failed: ${execError}`);
-                if (execError instanceof Error && 'stderr' in execError) {
-                    core.error(`Conftest stderr: ${execError.stderr}`);
-                }
-                throw execError;
-            }
+            const result = await this.runConftest(terraformPath, policyPath, additionalArgs ? [additionalArgs] : []);
+            return {
+                denyCount: result.denies,
+                findings: result.details.map(detail => ({
+                    rule: 'OPA Policy',
+                    message: detail,
+                    resource: 'Terraform'
+                }))
+            };
         }
         catch (error) {
             core.warning(`Conftest scan failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -112,41 +61,63 @@ class ConftestScanner {
             };
         }
     }
-    async convertTerraformToJson(terraformPath) {
-        try {
-            const tfFiles = await this.findTerraformFiles(terraformPath);
-            if (tfFiles.length === 0) {
-                throw new Error('No Terraform files found');
+    async runConftest(targetPath, policyPath, extraArgs = []) {
+        let parserArgs = [];
+        let target = targetPath;
+        const looksLikeJsonFile = targetPath.endsWith('.json') && fs.existsSync(targetPath);
+        if (looksLikeJsonFile) {
+            parserArgs = ['--parser', 'json'];
+            core.info('Using JSON parser for .json file');
+        }
+        else {
+            if (!fs.existsSync(targetPath)) {
+                core.warning(`Conftest target path not found: ${targetPath}`);
+                return { denies: 0, details: [] };
             }
-            const jsonPath = path.join(terraformPath, 'terraform.json');
-            if (fs.existsSync(jsonPath)) {
-                core.info(`Using pre-generated Terraform JSON: ${jsonPath}`);
-                return jsonPath;
-            }
-            core.warning('No pre-generated terraform.json found, falling back to raw file scanning');
-            return terraformPath;
+            parserArgs = ['--parser', 'hcl2'];
+            core.info('Using HCL2 parser for Terraform files');
         }
-        catch (error) {
-            core.warning(`Failed to process Terraform files: ${error instanceof Error ? error.message : String(error)}`);
-            core.info('Falling back to scanning raw Terraform files with Conftest');
-            return terraformPath;
+        const args = ['test', target, '--policy', policyPath, ...parserArgs, '--output', 'json', ...extraArgs];
+        core.info(`Executing: conftest ${args.join(' ')}`);
+        let stdout = '';
+        let stderr = '';
+        const code = await exec.exec('conftest', args, {
+            ignoreReturnCode: true,
+            listeners: {
+                stdout: (data) => (stdout += data.toString()),
+                stderr: (data) => (stderr += data.toString()),
+            },
+        });
+        if (code > 1) {
+            core.warning(`Conftest execution error (exit ${code}): ${stderr || '(no stderr)'}`);
+            return { denies: 0, details: [] };
         }
-    }
-    async findTerraformFiles(dir) {
-        const files = await fs.promises.readdir(dir);
-        return files.filter(file => file.endsWith('.tf'));
-    }
-    async initializeTerraform(terraformPath) {
+        if (!stdout.trim()) {
+            core.info('Conftest produced no output; assuming 0 denies.');
+            return { denies: 0, details: [] };
+        }
         try {
-            await execAsync(`cd ${terraformPath} && terraform init`);
+            const parsed = JSON.parse(stdout);
+            const failures = [];
+            let denyCount = 0;
+            for (const res of parsed) {
+                if (!res?.failures)
+                    continue;
+                for (const f of res.failures) {
+                    denyCount++;
+                    failures.push(f?.msg ?? JSON.stringify(f));
+                }
+            }
+            return { denies: denyCount, details: failures };
         }
-        catch (error) {
-            core.warning(`Terraform init failed: ${error instanceof Error ? error.message : String(error)}`);
+        catch (e) {
+            core.warning(`Failed to parse Conftest JSON: ${e.message}`);
+            return { denies: 0, details: [] };
         }
     }
     async ensureConftestInstalled(version) {
         try {
-            await execAsync('conftest --version');
+            await exec.exec('conftest', ['--version']);
             core.info('Conftest is already installed');
         }
         catch {
@@ -154,79 +125,40 @@ class ConftestScanner {
             const conftestVersion = version || 'v0.45.0';
             try {
                 const versionWithoutV = conftestVersion.replace('v', '');
-                await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
-                await execAsync('tar -xzf conftest.tar.gz');
-                await execAsync('chmod +x conftest');
+                await exec.exec('curl', ['-L', '-o', 'conftest.tar.gz', `https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`]);
+                await exec.exec('tar', ['-xzf', 'conftest.tar.gz']);
+                await exec.exec('chmod', ['+x', 'conftest']);
                 core.info('Conftest binary extracted and made executable');
-                try {
-                    const { stdout } = await execAsync('./conftest --version');
-                    core.info(`Conftest test successful: ${stdout.trim()}`);
-                }
-                catch (error) {
-                    core.error(`Conftest test failed: ${error}`);
-                }
-                await execAsync('sudo mv conftest /usr/local/bin/');
-                await execAsync('chmod +x /usr/local/bin/conftest');
-                await execAsync('rm conftest.tar.gz');
+                await exec.exec('sudo', ['mv', 'conftest', '/usr/local/bin/']);
+                await exec.exec('chmod', ['+x', '/usr/local/bin/conftest']);
+                await exec.exec('rm', ['conftest.tar.gz']);
             }
             catch (error) {
                 core.warning(`Direct download failed, trying alternative method: ${error}`);
                 const versionWithoutV = conftestVersion.replace('v', '');
-                await execAsync(`wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
-                await execAsync('tar -xzf conftest.tar.gz');
-                await execAsync('chmod +x conftest');
+                await exec.exec('wget', ['-O', 'conftest.tar.gz', `https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`]);
+                await exec.exec('tar', ['-xzf', 'conftest.tar.gz']);
+                await exec.exec('chmod', ['+x', 'conftest']);
                 core.info('Conftest binary extracted and made executable (fallback method)');
-                try {
-                    const { stdout } = await execAsync('./conftest --version');
-                    core.info(`Conftest test successful (fallback): ${stdout.trim()}`);
-                }
-                catch (error) {
-                    core.error(`Conftest test failed (fallback): ${error}`);
-                }
-                await execAsync('sudo mv conftest /usr/local/bin/');
-                await execAsync('chmod +x /usr/local/bin/conftest');
-                await execAsync('rm conftest.tar.gz');
+                await exec.exec('sudo', ['mv', 'conftest', '/usr/local/bin/']);
+                await exec.exec('chmod', ['+x', '/usr/local/bin/conftest']);
+                await exec.exec('rm', ['conftest.tar.gz']);
             }
         }
     }
     async ensureTerraformInstalled() {
         try {
-            await execAsync('terraform --version');
+            await exec.exec('terraform', ['--version']);
             core.info('Terraform is already installed');
         }
         catch {
             core.info('Installing Terraform...');
-            await execAsync('curl -fsSL https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip -o terraform.zip');
-            await execAsync('unzip terraform.zip');
-            await execAsync('sudo mv terraform /usr/local/bin/');
-            await execAsync('chmod +x /usr/local/bin/terraform');
-            await execAsync('rm terraform.zip');
+            await exec.exec('curl', ['-fsSL', 'https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip', '-o', 'terraform.zip']);
+            await exec.exec('unzip', ['terraform.zip']);
+            await exec.exec('sudo', ['mv', 'terraform', '/usr/local/bin/']);
+            await exec.exec('chmod', ['+x', '/usr/local/bin/terraform']);
+            await exec.exec('rm', ['terraform.zip']);
         }
-    }
-    parseConftestResults(results) {
-        const findings = [];
-        let denyCount = 0;
-        if (Array.isArray(results)) {
-            for (const result of results) {
-                if (result.failures) {
-                    for (const failure of result.failures) {
-                        denyCount++;
-                        if (findings.length < 10) {
-                            findings.push({
-                                rule: failure.msg || 'Unknown rule',
-                                message: failure.msg || 'No message available',
-                                resource: result.filepath || 'Unknown'
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        core.info(`Conftest scan completed: ${denyCount} policy violations found`);
-        return {
-            denyCount,
-            findings
-        };
     }
 }
 exports.ConftestScanner = ConftestScanner;

@@ -7,11 +7,8 @@ export declare class ConftestScanner {
             resource: string;
         }>;
     }>;
-    private convertTerraformToJson;
-    private findTerraformFiles;
-    private initializeTerraform;
+    private runConftest;
     private ensureConftestInstalled;
     private ensureTerraformInstalled;
-    private parseConftestResults;
 }
 //# sourceMappingURL=conftest.d.ts.map
