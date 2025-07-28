@@ -70,7 +70,23 @@ class CheckovScanner {
         catch {
             core.info('Installing Checkov...');
             const checkovVersion = version || '3.1.0';
-            await execAsync(`pip install checkov==${checkovVersion}`);
+            try {
+                await execAsync(`curl -L https://github.com/bridgecrewio/checkov/releases/download/${checkovVersion}/checkov-linux-x86_64 -o checkov`);
+                await execAsync('chmod +x checkov');
+                await execAsync('sudo mv checkov /usr/local/bin/');
+                core.info('Checkov installed via binary');
+            }
+            catch (binaryError) {
+                core.warning(`Binary installation failed: ${binaryError}`);
+                try {
+                    await execAsync(`pip install checkov==${checkovVersion}`);
+                    core.info('Checkov installed via pip');
+                }
+                catch (pipError) {
+                    core.warning(`Pip installation failed: ${pipError}`);
+                    throw new Error('Failed to install Checkov via both binary and pip methods');
+                }
+            }
         }
     }
     parseCheckovResults(results) {

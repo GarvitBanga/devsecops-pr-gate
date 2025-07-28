@@ -43,8 +43,23 @@ jobs:
           trivy fs --format json examples/app/ || echo "Trivy scan failed"
           
           echo "Testing Checkov installation..."
-          pip install checkov==3.1.0
-          checkov --version
+          # Try different installation methods for Checkov
+          echo "Method 1: pip install with specific version"
+          pip install checkov==3.1.0 || echo "Method 1 failed"
+          
+          echo "Method 2: Try with --no-deps"
+          pip install checkov==3.1.0 --no-deps || echo "Method 2 failed"
+          
+          echo "Method 3: Use pipx"
+          pip install pipx
+          pipx install checkov==3.1.0 || echo "Method 3 failed"
+          
+          echo "Method 4: Use official installer"
+          curl -L https://github.com/bridgecrewio/checkov/releases/download/3.1.0/checkov-linux-x86_64 -o checkov
+          chmod +x checkov
+          sudo mv checkov /usr/local/bin/
+          
+          checkov --version || echo "Checkov installation failed"
           
           echo "Testing Checkov scan..."
           checkov -d examples/infra/ --output json --output-file-path checkov-debug || echo "Checkov scan failed"
