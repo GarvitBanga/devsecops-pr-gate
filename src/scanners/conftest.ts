@@ -32,11 +32,24 @@ export class ConftestScanner {
       const command = `conftest test ${absoluteJsonPath} --policy ${absolutePolicyPath} --parser ${parser} --output json${args}`;
 
       core.info(`Executing: ${command}`);
-      const { stdout } = await execAsync(command);
-
-      const results = JSON.parse(stdout);
-
-      return this.parseConftestResults(results);
+      try {
+        const { stdout, stderr } = await execAsync(command);
+        
+        if (stderr) {
+          core.warning(`Conftest stderr: ${stderr}`);
+        }
+        
+        core.info(`Conftest stdout: ${stdout}`);
+        const results = JSON.parse(stdout);
+        
+        return this.parseConftestResults(results);
+      } catch (execError) {
+        core.error(`Conftest execution failed: ${execError}`);
+        if (execError instanceof Error && 'stderr' in execError) {
+          core.error(`Conftest stderr: ${(execError as any).stderr}`);
+        }
+        throw execError;
+      }
 
     } catch (error) {
       core.warning(`Conftest scan failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -89,7 +102,7 @@ export class ConftestScanner {
       core.info('Conftest is already installed');
     } catch {
       core.info('Installing Conftest...');
-      const conftestVersion = version || 'v0.46.0';
+      const conftestVersion = version || 'v0.45.0';
       try {
         const versionWithoutV = conftestVersion.replace('v', '');
         await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
