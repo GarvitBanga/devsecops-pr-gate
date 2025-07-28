@@ -55,6 +55,15 @@ class ConftestScanner {
             const command = `conftest test ${absoluteJsonPath} --policy ${absolutePolicyPath} --parser ${parser} --output json${args}`;
             core.info(`Executing: ${command}`);
             try {
+                const { stdout: whichOutput } = await execAsync('which conftest');
+                core.info(`Conftest binary location: ${whichOutput.trim()}`);
+                const { stdout: lsOutput } = await execAsync(`ls -la ${whichOutput.trim()}`);
+                core.info(`Conftest binary permissions: ${lsOutput.trim()}`);
+            }
+            catch (error) {
+                core.error(`Conftest binary check failed: ${error}`);
+            }
+            try {
                 const { stdout, stderr } = await execAsync(command);
                 if (stderr) {
                     core.warning(`Conftest stderr: ${stderr}`);
@@ -123,6 +132,15 @@ class ConftestScanner {
                 const versionWithoutV = conftestVersion.replace('v', '');
                 await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
                 await execAsync('tar -xzf conftest.tar.gz');
+                await execAsync('chmod +x conftest');
+                core.info('Conftest binary extracted and made executable');
+                try {
+                    const { stdout } = await execAsync('./conftest --version');
+                    core.info(`Conftest test successful: ${stdout.trim()}`);
+                }
+                catch (error) {
+                    core.error(`Conftest test failed: ${error}`);
+                }
                 await execAsync('sudo mv conftest /usr/local/bin/');
                 await execAsync('chmod +x /usr/local/bin/conftest');
                 await execAsync('rm conftest.tar.gz');
@@ -132,6 +150,15 @@ class ConftestScanner {
                 const versionWithoutV = conftestVersion.replace('v', '');
                 await execAsync(`wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
                 await execAsync('tar -xzf conftest.tar.gz');
+                await execAsync('chmod +x conftest');
+                core.info('Conftest binary extracted and made executable (fallback method)');
+                try {
+                    const { stdout } = await execAsync('./conftest --version');
+                    core.info(`Conftest test successful (fallback): ${stdout.trim()}`);
+                }
+                catch (error) {
+                    core.error(`Conftest test failed (fallback): ${error}`);
+                }
                 await execAsync('sudo mv conftest /usr/local/bin/');
                 await execAsync('chmod +x /usr/local/bin/conftest');
                 await execAsync('rm conftest.tar.gz');
