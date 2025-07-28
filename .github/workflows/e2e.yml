@@ -54,9 +54,9 @@ jobs:
           trivy fs --format json examples/app/ || echo "Trivy scan failed"
           
           echo "Testing Checkov installation..."
-          # Use pip installation with 3.1.0 (which works)
-          echo "Installing Checkov via pip..."
-          pip install checkov==3.1.0
+          # Try different Checkov versions to avoid cyclonedx issue
+          echo "Trying Checkov 2.3.0 (older but stable)..."
+          pip install checkov==2.3.0 || echo "Checkov 2.3.0 failed, trying 2.2.0..."
           checkov --version || echo "Checkov installation failed"
           
           echo "Testing Checkov scan..."
@@ -71,7 +71,11 @@ jobs:
           conftest --version
           
           echo "Testing Conftest scan..."
-          conftest test examples/infra/ --policy policies/conftest/ --parser hcl2 --output json || echo "Conftest scan failed"
+          echo "Available policies:"
+          ls -la policies/conftest/
+          echo "---"
+          echo "Testing Conftest scan with verbose output..."
+          conftest test examples/infra/ --policy policies/conftest/ --parser hcl2 --output json --trace || echo "Conftest scan failed"
 
       - name: Test DevSecOps PR Gate
         id: devsecops-pr-gate

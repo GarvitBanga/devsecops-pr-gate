@@ -30,7 +30,7 @@ inputs:
   checkov-version:
     description: 'Checkov version to install (default: latest stable)'
     required: false
-    default: '3.1.0'
+    default: '2.3.0'
   conftest-version:
     description: 'Conftest version to install (default: latest stable)'
     required: false

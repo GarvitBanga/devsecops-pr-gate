@@ -69,7 +69,7 @@ class CheckovScanner {
         }
         catch {
             core.info('Installing Checkov...');
-            const checkovVersion = version || '3.1.0';
+            const checkovVersion = version || '2.3.0';
             try {
                 await execAsync(`pip install checkov==${checkovVersion}`);
                 core.info('Checkov installed via pip');
