@@ -7,6 +7,9 @@ export declare class ConftestScanner {
             resource: string;
         }>;
     }>;
+    private convertTerraformToJson;
+    private findTerraformFiles;
+    private initializeTerraform;
     private ensureConftestInstalled;
     private parseConftestResults;
 }

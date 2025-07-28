@@ -1,11 +1,12 @@
-package rules.ssh_world
+package main
 
 deny[msg] {
-  input.resource_type == "aws_security_group_rule"
-  input.from_port == 22
-  input.to_port == 22
-  some cidr
-  input.cidr_blocks[_] == cidr
+  input.planned_values.root_module.resources[_].type == "aws_security_group_rule"
+  resource := input.planned_values.root_module.resources[_]
+  resource.type == "aws_security_group_rule"
+  resource.values.from_port == 22
+  resource.values.to_port == 22
+  cidr := resource.values.cidr_blocks[_]
   cidr == "0.0.0.0/0"
-  msg := sprintf("SSH port 22 open to world (0.0.0.0/0)", [])
+  msg := sprintf("SSH port 22 open to world (0.0.0.0/0) in resource %s", [resource.address])
 } 

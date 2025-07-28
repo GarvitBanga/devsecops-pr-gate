@@ -1,6 +1,8 @@
 import * as core from '@actions/core';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -18,8 +20,10 @@ export class ConftestScanner {
 
       await this.ensureConftestInstalled(version);
 
+      const jsonPath = await this.convertTerraformToJson(path);
+      
       const args = additionalArgs ? ` ${additionalArgs}` : '';
-      const command = `conftest test ${path} --policy ${policyPath} --parser hcl2 --output json${args}`;
+      const command = `conftest test ${jsonPath} --policy ${policyPath} --parser json --output json${args}`;
 
       core.info(`Executing: ${command}`);
       const { stdout } = await execAsync(command);
@@ -37,6 +41,43 @@ export class ConftestScanner {
     }
   }
 
+  private async convertTerraformToJson(terraformPath: string): Promise<string> {
+    try {
+      const tfFiles = await this.findTerraformFiles(terraformPath);
+      if (tfFiles.length === 0) {
+        throw new Error('No Terraform files found');
+      }
+
+      await this.initializeTerraform(terraformPath);
+
+      const planPath = path.join(terraformPath, 'plan.out');
+      await execAsync(`cd ${terraformPath} && terraform plan -out=plan.out`);
+
+      const jsonPath = path.join(terraformPath, 'terraform.json');
+      await execAsync(`cd ${terraformPath} && terraform show -json plan.out > terraform.json`);
+
+      core.info(`Converted Terraform to JSON: ${jsonPath}`);
+      return jsonPath;
+
+    } catch (error) {
+      core.warning(`Failed to convert Terraform to JSON: ${error instanceof Error ? error.message : String(error)}`);
+      return terraformPath;
+    }
+  }
+
+  private async findTerraformFiles(dir: string): Promise<string[]> {
+    const files = await fs.promises.readdir(dir);
+    return files.filter(file => file.endsWith('.tf'));
+  }
+
+  private async initializeTerraform(terraformPath: string): Promise<void> {
+    try {
+      await execAsync(`cd ${terraformPath} && terraform init`);
+    } catch (error) {
+      core.warning(`Terraform init failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private async ensureConftestInstalled(version?: string): Promise<void> {
     try {
       await execAsync('conftest --version');
@@ -44,7 +85,7 @@ export class ConftestScanner {
     } catch {
       core.info('Installing Conftest...');
       const conftestVersion = version || 'v0.55.0';
-              await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
+      await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
       await execAsync('tar xzf conftest.tar.gz');
       await execAsync('sudo mv conftest /usr/local/bin/');
       await execAsync('chmod +x /usr/local/bin/conftest');

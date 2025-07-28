@@ -37,14 +37,17 @@ exports.ConftestScanner = void 0;
 const core = __importStar(require("@actions/core"));
 const child_process_1 = require("child_process");
 const util_1 = require("util");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 class ConftestScanner {
     async scan(path, policyPath, version, additionalArgs) {
         try {
             core.info(`Running Conftest scan on: ${path} with policies: ${policyPath}`);
             await this.ensureConftestInstalled(version);
+            const jsonPath = await this.convertTerraformToJson(path);
             const args = additionalArgs ? ` ${additionalArgs}` : '';
-            const command = `conftest test ${path} --policy ${policyPath} --parser hcl2 --output json${args}`;
+            const command = `conftest test ${jsonPath} --policy ${policyPath} --parser json --output json${args}`;
             core.info(`Executing: ${command}`);
             const { stdout } = await execAsync(command);
             const results = JSON.parse(stdout);
@@ -56,6 +59,37 @@ class ConftestScanner {
                 denyCount: 0,
                 findings: []
             };
+        }
+    }
+    async convertTerraformToJson(terraformPath) {
+        try {
+            const tfFiles = await this.findTerraformFiles(terraformPath);
+            if (tfFiles.length === 0) {
+                throw new Error('No Terraform files found');
+            }
+            await this.initializeTerraform(terraformPath);
+            const planPath = path.join(terraformPath, 'plan.out');
+            await execAsync(`cd ${terraformPath} && terraform plan -out=plan.out`);
+            const jsonPath = path.join(terraformPath, 'terraform.json');
+            await execAsync(`cd ${terraformPath} && terraform show -json plan.out > terraform.json`);
+            core.info(`Converted Terraform to JSON: ${jsonPath}`);
+            return jsonPath;
+        }
+        catch (error) {
+            core.warning(`Failed to convert Terraform to JSON: ${error instanceof Error ? error.message : String(error)}`);
+            return terraformPath;
+        }
+    }
+    async findTerraformFiles(dir) {
+        const files = await fs.promises.readdir(dir);
+        return files.filter(file => file.endsWith('.tf'));
+    }
+    async initializeTerraform(terraformPath) {
+        try {
+            await execAsync(`cd ${terraformPath} && terraform init`);
+        }
+        catch (error) {
+            core.warning(`Terraform init failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
     async ensureConftestInstalled(version) {
