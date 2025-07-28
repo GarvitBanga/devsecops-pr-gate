@@ -24,6 +24,41 @@ jobs:
       - name: Build action
         run: npm run build
 
+      - name: Debug - Check files
+        run: |
+          echo "Checking example files..."
+          ls -la examples/app/
+          ls -la examples/infra/
+          cat examples/app/requirements.txt
+          echo "---"
+          head -10 examples/infra/main.tf
+
+      - name: Debug - Test scanners manually
+        run: |
+          echo "Testing Trivy installation..."
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.0
+          trivy --version
+          
+          echo "Testing Trivy scan..."
+          trivy fs --format json examples/app/ || echo "Trivy scan failed"
+          
+          echo "Testing Checkov installation..."
+          pip install checkov==3.1.0
+          checkov --version
+          
+          echo "Testing Checkov scan..."
+          checkov -d examples/infra/ --output json --output-file-path checkov-debug || echo "Checkov scan failed"
+          
+          echo "Testing Conftest installation..."
+          curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_linux_x86_64.tar.gz
+          tar xzf conftest.tar.gz
+          sudo mv conftest /usr/local/bin/
+          chmod +x /usr/local/bin/conftest
+          conftest --version
+          
+          echo "Testing Conftest scan..."
+          conftest test examples/infra/ --policy policies/conftest/ --parser hcl2 --output json || echo "Conftest scan failed"
+
       - name: Test DevSecOps PR Gate
         id: devsecops-pr-gate
         uses: ./
@@ -34,8 +69,9 @@ jobs:
           opa-policy-path: policies/conftest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
-      - name: Verify outputs
+      - name: Debug - Check outputs
         run: |
           echo "Comment URL: ${{ steps.devsecops-pr-gate.outputs.comment-url }}"
           echo "Trivy High: ${{ steps.devsecops-pr-gate.outputs.trivy-high }}"
@@ -44,9 +80,25 @@ jobs:
           echo "Checkov Critical: ${{ steps.devsecops-pr-gate.outputs.checkov-critical }}"
           echo "OPA Deny Count: ${{ steps.devsecops-pr-gate.outputs.opa-deny-count }}"
           echo "Has Blockers: ${{ steps.devsecops-pr-gate.outputs.has-blockers }}"
+
+      - name: Verify outputs
+        run: |
+          echo "=== DEBUGGING OUTPUT ==="
+          echo "Expected: has-blockers should be 'true'"
+          echo "Actual: has-blockers = '${{ steps.devsecops-pr-gate.outputs.has-blockers }}'"
+          echo "Trivy High: '${{ steps.devsecops-pr-gate.outputs.trivy-high }}'"
+          echo "Trivy Critical: '${{ steps.devsecops-pr-gate.outputs.trivy-critical }}'"
+          echo "Checkov High: '${{ steps.devsecops-pr-gate.outputs.checkov-high }}'"
+          echo "Checkov Critical: '${{ steps.devsecops-pr-gate.outputs.checkov-critical }}'"
+          echo "OPA Deny Count: '${{ steps.devsecops-pr-gate.outputs.opa-deny-count }}'"
           
           if [ "${{ steps.devsecops-pr-gate.outputs.has-blockers }}" != "true" ]; then
             echo "FAIL: Expected to find blockers in examples"
+            echo "This might be due to scanner installation issues in the GitHub Actions environment"
+            echo "The action should find:"
+            echo "- Trivy: vulnerable requests package (2.19.1)"
+            echo "- Checkov: SSH open to world (0.0.0.0/0)"
+            echo "- OPA: SSH policy violation"
             exit 1
           fi
           
