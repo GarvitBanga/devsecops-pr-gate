@@ -64,18 +64,18 @@ class ConftestScanner {
     async runConftest(targetPath, policyPath, extraArgs = []) {
         let parserArgs = [];
         let target = targetPath;
-        const looksLikeJsonFile = targetPath.endsWith('.json') && fs.existsSync(targetPath);
-        if (looksLikeJsonFile) {
+        const targetStats = fs.statSync(targetPath);
+        if (targetStats.isDirectory()) {
+            parserArgs = ['--parser', 'hcl2'];
+            core.info('Using HCL2 parser for Terraform directory');
+        }
+        else if (targetPath.endsWith('.json')) {
             parserArgs = ['--parser', 'json'];
             core.info('Using JSON parser for .json file');
         }
         else {
-            if (!fs.existsSync(targetPath)) {
-                core.warning(`Conftest target path not found: ${targetPath}`);
-                return { denies: 0, details: [] };
-            }
             parserArgs = ['--parser', 'hcl2'];
-            core.info('Using HCL2 parser for Terraform files');
+            core.info('Using HCL2 parser for file');
         }
         const args = ['test', target, '--policy', policyPath, ...parserArgs, '--output', 'json', ...extraArgs];
         core.info(`Executing: conftest ${args.join(' ')}`);
