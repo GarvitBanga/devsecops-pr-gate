@@ -11,6 +11,7 @@ export declare class ConftestScanner {
     private findTerraformFiles;
     private initializeTerraform;
     private ensureConftestInstalled;
+    private ensureTerraformInstalled;
     private parseConftestResults;
 }
 //# sourceMappingURL=conftest.d.ts.map

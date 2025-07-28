@@ -45,9 +45,12 @@ class ConftestScanner {
         try {
             core.info(`Running Conftest scan on: ${path} with policies: ${policyPath}`);
             await this.ensureConftestInstalled(version);
+            await this.ensureTerraformInstalled();
             const jsonPath = await this.convertTerraformToJson(path);
             const args = additionalArgs ? ` ${additionalArgs}` : '';
-            const command = `conftest test ${jsonPath} --policy ${policyPath} --parser json --output json${args}`;
+            const isJsonFile = jsonPath.endsWith('.json');
+            const parser = isJsonFile ? 'json' : 'hcl2';
+            const command = `conftest test ${jsonPath} --policy ${policyPath} --parser ${parser} --output json${args}`;
             core.info(`Executing: ${command}`);
             const { stdout } = await execAsync(command);
             const results = JSON.parse(stdout);
@@ -86,6 +89,7 @@ class ConftestScanner {
         }
         catch (error) {
             core.warning(`Failed to convert Terraform to JSON: ${error instanceof Error ? error.message : String(error)}`);
+            core.info('Falling back to scanning raw Terraform files with Conftest');
             return terraformPath;
         }
     }
@@ -113,6 +117,20 @@ class ConftestScanner {
             await execAsync('tar xzf conftest.tar.gz');
             await execAsync('sudo mv conftest /usr/local/bin/');
             await execAsync('chmod +x /usr/local/bin/conftest');
+        }
+    }
+    async ensureTerraformInstalled() {
+        try {
+            await execAsync('terraform --version');
+            core.info('Terraform is already installed');
+        }
+        catch {
+            core.info('Installing Terraform...');
+            await execAsync('curl -fsSL https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip -o terraform.zip');
+            await execAsync('unzip terraform.zip');
+            await execAsync('sudo mv terraform /usr/local/bin/');
+            await execAsync('chmod +x /usr/local/bin/terraform');
+            await execAsync('rm terraform.zip');
         }
     }
     parseConftestResults(results) {

@@ -58,8 +58,7 @@ jobs:
 
 ## Example
 
-```
-### DevSecOps PR Gate
+The action creates a sticky PR comment like this:
 
 **Summary**
 | Tool    | Critical | High | Status |
@@ -74,7 +73,6 @@ jobs:
 - OPA: SSH access open to world
 
 *Merge blocked - findings ≥ high exist.*
-```
 
 ## Development
 
@@ -83,7 +81,6 @@ npm install
 npm run build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development details.
 
 ## License
 

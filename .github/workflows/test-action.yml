@@ -28,31 +28,7 @@ jobs:
       - name: Build action
         run: npm run build
 
-      - name: Debug - Check built files
-        run: |
-          echo "=== CHECKING BUILT FILES ==="
-          ls -la dist/
-          echo "---"
-          echo "Checking main entry point:"
-          head -20 dist/index.js
-          echo "---"
-          echo "Checking if action.yml points to correct file:"
-          grep -A 5 "runs:" action.yml
 
-      - name: Debug - Check example files
-        run: |
-          echo "=== CHECKING EXAMPLE FILES ==="
-          echo "App directory:"
-          ls -la examples/app/
-          echo "---"
-          echo "Infra directory:"
-          ls -la examples/infra/
-          echo "---"
-          echo "App requirements:"
-          cat examples/app/requirements.txt
-          echo "---"
-          echo "Infra main.tf:"
-          head -20 examples/infra/main.tf
 
       - name: Test Action with Security Issues (Should Fail)
         id: test-with-issues
@@ -66,44 +42,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify Action Detected Issues
+      - name: Test Action with Minimal Inputs
+        id: test-minimal
+        uses: ./
+        continue-on-error: true
+        with:
+          paths-app: examples/app/
+          paths-iac: examples/infra/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Tests
         if: always()
         run: |
-          echo "=== ACTION TEST RESULTS ==="
-          echo "Action outcome: ${{ steps.test-with-issues.outcome }}"
-          echo "Action conclusion: ${{ steps.test-with-issues.conclusion }}"
-          echo ""
-          echo "Action outputs:"
-          echo "  has-blockers: '${{ steps.test-with-issues.outputs.has-blockers }}'"
-          echo "  trivy-high: '${{ steps.test-with-issues.outputs.trivy-high }}'"
-          echo "  trivy-critical: '${{ steps.test-with-issues.outputs.trivy-critical }}'"
-          echo "  checkov-high: '${{ steps.test-with-issues.outputs.checkov-high }}'"
-          echo "  checkov-critical: '${{ steps.test-with-issues.outputs.checkov-critical }}'"
-          echo "  opa-deny-count: '${{ steps.test-with-issues.outputs.opa-deny-count }}'"
-          echo ""
-          
-          # Test that outputs are set (not empty)
-          if [ -z "${{ steps.test-with-issues.outputs.has-blockers }}" ]; then
-            echo " FAIL: has-blockers output is empty - action may not have run properly"
+          # Check main test
+          if [ "${{ steps.test-with-issues.outputs.has-blockers }}" != "true" ]; then
+            echo "FAIL: Main test should detect security issues"
             exit 1
           fi
           
-          # The action should have detected security issues
-          if [ "${{ steps.test-with-issues.outputs.has-blockers }}" = "true" ]; then
-            echo " PASS: Action correctly detected security issues (has-blockers = true)"
-          else
-            echo " FAIL: Action did not detect security issues (has-blockers = ${{ steps.test-with-issues.outputs.has-blockers }})"
+          if [ "${{ steps.test-with-issues.outcome }}" != "failure" ]; then
+            echo "FAIL: Main test should fail when security issues found"
             exit 1
           fi
           
-          # The action should have failed due to security issues
-          if [ "${{ steps.test-with-issues.outcome }}" = "failure" ]; then
-            echo " PASS: Action correctly failed when security issues were found"
-          else
-            echo " FAIL: Action should have failed but didn't (outcome = ${{ steps.test-with-issues.outcome }})"
+          # Check minimal test
+          if [ "${{ steps.test-minimal.outputs.has-blockers }}" != "true" ]; then
+            echo "FAIL: Minimal test should detect security issues"
             exit 1
           fi
           
-          echo ""
-          echo " SUCCESS: DevSecOps PR Gate is working correctly!"
-          echo "It detected security issues and blocked the PR as expected." 
+          echo "PASS: All tests completed successfully" 
