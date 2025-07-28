@@ -113,10 +113,21 @@ class ConftestScanner {
         catch {
             core.info('Installing Conftest...');
             const conftestVersion = version || 'v0.55.0';
-            await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
-            await execAsync('tar xzf conftest.tar.gz');
-            await execAsync('sudo mv conftest /usr/local/bin/');
-            await execAsync('chmod +x /usr/local/bin/conftest');
+            try {
+                await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
+                await execAsync('tar -xzf conftest.tar.gz');
+                await execAsync('sudo mv conftest /usr/local/bin/');
+                await execAsync('chmod +x /usr/local/bin/conftest');
+                await execAsync('rm conftest.tar.gz');
+            }
+            catch (error) {
+                core.warning(`Direct download failed, trying alternative method: ${error}`);
+                await execAsync(`wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
+                await execAsync('tar -xzf conftest.tar.gz');
+                await execAsync('sudo mv conftest /usr/local/bin/');
+                await execAsync('chmod +x /usr/local/bin/conftest');
+                await execAsync('rm conftest.tar.gz');
+            }
         }
     }
     async ensureTerraformInstalled() {
