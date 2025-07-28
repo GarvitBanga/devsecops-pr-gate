@@ -23,13 +23,22 @@ export class CheckovScanner {
       await this.ensureCheckovInstalled(version);
 
       const args = additionalArgs ? ` ${additionalArgs}` : '';
-      const command = `checkov -d ${path} --output json --output-file-path checkov-results${args}`;
+      const command = `checkov -d ${path} --output json --output-file-path .${args}`;
 
       core.info(`Executing: ${command}`);
-      await execAsync(command);
+      
+      try {
+        await execAsync(command);
+      } catch (error) {
+        const fs = require('fs');
+        if (!fs.existsSync('results_json.json')) {
+          throw error;
+        }
+        core.info('Checkov found violations (expected behavior)');
+      }
 
       const fs = require('fs');
-      const results = JSON.parse(fs.readFileSync('checkov-results.json', 'utf8'));
+      const results = JSON.parse(fs.readFileSync('results_json.json', 'utf8'));
 
       return this.parseCheckovResults(results);
 
@@ -98,7 +107,19 @@ export class CheckovScanner {
 
     if (results.results && results.results.failed_checks) {
       for (const check of results.results.failed_checks) {
-        const severity = check.severity?.toLowerCase() || 'unknown';
+        let severity = check.severity?.toLowerCase() || 'unknown';
+        
+        if (severity === 'unknown' || severity === 'null') {
+          if (check.check_id === 'CKV_AWS_24') { 
+            severity = 'high';
+          } else if (check.check_id === 'CKV_AWS_145') { 
+            severity = 'high';
+          } else if (check.check_id === 'CKV_AWS_23') { 
+            severity = 'medium';
+          } else {
+            severity = 'medium'; 
+          }
+        }
         
         switch (severity) {
           case 'critical':
@@ -118,7 +139,7 @@ export class CheckovScanner {
         if (findings.length < 10) {
           findings.push({
             check: check.check_id || 'Unknown',
-            severity: check.severity || 'Unknown',
+            severity: severity.toUpperCase(),
             description: check.check_name || 'No description available',
             resource: check.resource || 'Unknown'
           });

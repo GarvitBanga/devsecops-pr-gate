@@ -30,6 +30,11 @@ export class TrivyScanner {
 
       const fs = require('fs');
       const results = JSON.parse(fs.readFileSync('trivy-results.json', 'utf8'));
+      
+      core.info(`DEBUG: Trivy raw results structure: ${JSON.stringify(Object.keys(results))}`);
+      if (results.Results) {
+        core.info(`DEBUG: Trivy has ${results.Results.length} results`);
+      }
 
       return this.parseTrivyResults(results);
 
@@ -80,8 +85,11 @@ export class TrivyScanner {
     let medium = 0;
     let low = 0;
 
+    core.info(`DEBUG: Parsing Trivy results, Results exists: ${!!results.Results}`);
     if (results.Results) {
+      core.info(`DEBUG: Found ${results.Results.length} result entries`);
       for (const result of results.Results) {
+        core.info(`DEBUG: Result has Vulnerabilities: ${!!result.Vulnerabilities}, count: ${result.Vulnerabilities?.length || 0}`);
         if (result.Vulnerabilities) {
           for (const vuln of result.Vulnerabilities) {
             const severity = vuln.Severity?.toLowerCase() || 'unknown';

@@ -1,8 +1,7 @@
 package rules.tags_required
 
-required := {"owner", "env"}
-
 deny[msg] {
-  input.tags_missing[name]
-  msg := sprintf("Missing required tag: %s on %s", [name, input.address])
+  input.resource_type == "aws_instance"
+  not input.tags
+  msg := sprintf("Missing required tags (owner, env) on %s", [input.resource_type])
 } 

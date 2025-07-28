@@ -66,15 +66,20 @@ async function run() {
             checkovScanner.scan(pathsIac, checkovVersion, checkovArgs),
             conftestScanner.scan(pathsIac, opaPolicyPath, conftestVersion, conftestArgs)
         ]);
+        core.info(`DEBUG: Trivy results - Critical: ${trivyResults.critical}, High: ${trivyResults.high}`);
+        core.info(`DEBUG: Checkov results - Critical: ${checkovResults.critical}, High: ${checkovResults.high}`);
+        core.info(`DEBUG: OPA results - Deny count: ${opaResults.denyCount}`);
         const results = {
             trivy: trivyResults,
             checkov: checkovResults,
             opa: opaResults
         };
         const hasBlockers = determineBlockers(results, failOn);
+        core.info(`DEBUG: Has blockers: ${hasBlockers}, Fail on: ${failOn}`);
         const summary = summaryRenderer.render(results, commentTitle, failOn);
         const commentUrl = await commentManager.createOrUpdateComment(summary);
         await uploadScanReports(results);
+        core.info('DEBUG: Setting outputs...');
         core.setOutput('comment-url', commentUrl);
         core.setOutput('trivy-high', results.trivy.high.toString());
         core.setOutput('trivy-critical', results.trivy.critical.toString());
@@ -82,6 +87,7 @@ async function run() {
         core.setOutput('checkov-critical', results.checkov.critical.toString());
         core.setOutput('opa-deny-count', results.opa.denyCount.toString());
         core.setOutput('has-blockers', hasBlockers.toString());
+        core.info('DEBUG: All outputs set successfully');
         if (hasBlockers) {
             core.setFailed(`DevSecOps PR Gate: Found ${failOn.toUpperCase()} or higher severity issues that must be resolved before merge.`);
         }
