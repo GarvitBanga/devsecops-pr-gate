@@ -117,4 +117,11 @@ checkov-results*
 test-results/
 
 # Project documentation (not for GitHub)
-PROJECT_*.md 
+PROJECT_*.md
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl.backup 
