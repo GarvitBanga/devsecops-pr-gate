@@ -112,9 +112,10 @@ class ConftestScanner {
         }
         catch {
             core.info('Installing Conftest...');
-            const conftestVersion = version || 'v0.55.0';
+            const conftestVersion = version || 'v0.46.0';
             try {
-                await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
+                const versionWithoutV = conftestVersion.replace('v', '');
+                await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
                 await execAsync('tar -xzf conftest.tar.gz');
                 await execAsync('sudo mv conftest /usr/local/bin/');
                 await execAsync('chmod +x /usr/local/bin/conftest');
@@ -122,7 +123,8 @@ class ConftestScanner {
             }
             catch (error) {
                 core.warning(`Direct download failed, trying alternative method: ${error}`);
-                await execAsync(`wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${conftestVersion}_Linux_x86_64.tar.gz`);
+                const versionWithoutV = conftestVersion.replace('v', '');
+                await execAsync(`wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_${versionWithoutV}_Linux_x86_64.tar.gz`);
                 await execAsync('tar -xzf conftest.tar.gz');
                 await execAsync('sudo mv conftest /usr/local/bin/');
                 await execAsync('chmod +x /usr/local/bin/conftest');
