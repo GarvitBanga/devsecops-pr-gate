@@ -67,13 +67,22 @@ class ConftestScanner {
             if (tfFiles.length === 0) {
                 throw new Error('No Terraform files found');
             }
-            await this.initializeTerraform(terraformPath);
-            const planPath = path.join(terraformPath, 'plan.out');
-            await execAsync(`cd ${terraformPath} && terraform plan -out=plan.out`);
-            const jsonPath = path.join(terraformPath, 'terraform.json');
-            await execAsync(`cd ${terraformPath} && terraform show -json plan.out > terraform.json`);
-            core.info(`Converted Terraform to JSON: ${jsonPath}`);
-            return jsonPath;
+            try {
+                const jsonPath = path.join(terraformPath, 'terraform.json');
+                await execAsync(`cd ${terraformPath} && terraform show -json . > terraform.json`);
+                core.info(`Converted Terraform to JSON: ${jsonPath}`);
+                return jsonPath;
+            }
+            catch (error) {
+                core.warning(`Direct conversion failed, trying with init: ${error}`);
+                await this.initializeTerraform(terraformPath);
+                const planPath = path.join(terraformPath, 'plan.out');
+                await execAsync(`cd ${terraformPath} && terraform plan -out=plan.out`);
+                const jsonPath = path.join(terraformPath, 'terraform.json');
+                await execAsync(`cd ${terraformPath} && terraform show -json plan.out > terraform.json`);
+                core.info(`Converted Terraform to JSON: ${jsonPath}`);
+                return jsonPath;
+            }
         }
         catch (error) {
             core.warning(`Failed to convert Terraform to JSON: ${error instanceof Error ? error.message : String(error)}`);

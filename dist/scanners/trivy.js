@@ -74,7 +74,20 @@ class TrivyScanner {
         catch {
             core.info('Installing Trivy...');
             const trivyVersion = version || 'v0.48.0';
-            await execAsync(`curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin ${trivyVersion}`);
+            try {
+                await execAsync(`curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin ${trivyVersion}`);
+            }
+            catch (error) {
+                core.warning(`Direct installation failed, trying with sudo: ${error}`);
+                try {
+                    await execAsync(`curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin ${trivyVersion}`);
+                }
+                catch (sudoError) {
+                    core.warning(`Sudo installation also failed: ${sudoError}`);
+                    await execAsync(`curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ./bin ${trivyVersion}`);
+                    process.env.PATH = `./bin:${process.env.PATH}`;
+                }
+            }
         }
     }
     parseTrivyResults(results) {
@@ -84,6 +97,7 @@ class TrivyScanner {
         let medium = 0;
         let low = 0;
         core.info(`DEBUG: Parsing Trivy results, Results exists: ${!!results.Results}`);
+        core.info(`DEBUG: Full Trivy results structure: ${JSON.stringify(Object.keys(results))}`);
         if (results.Results) {
             core.info(`DEBUG: Found ${results.Results.length} result entries`);
             for (const result of results.Results) {
@@ -91,6 +105,7 @@ class TrivyScanner {
                 if (result.Vulnerabilities) {
                     for (const vuln of result.Vulnerabilities) {
                         const severity = vuln.Severity?.toLowerCase() || 'unknown';
+                        core.info(`DEBUG: Found vulnerability: ${vuln.VulnerabilityID} with severity: ${severity}`);
                         switch (severity) {
                             case 'critical':
                                 critical++;

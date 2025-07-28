@@ -104,44 +104,51 @@ class CheckovScanner {
         let high = 0;
         let medium = 0;
         let low = 0;
-        if (results.results && results.results.failed_checks) {
-            for (const check of results.results.failed_checks) {
-                let severity = check.severity?.toLowerCase() || 'unknown';
-                if (severity === 'unknown' || severity === 'null') {
-                    if (check.check_id === 'CKV_AWS_24') {
-                        severity = 'high';
+        core.info(`DEBUG: Parsing Checkov results, results exists: ${!!results}`);
+        core.info(`DEBUG: Checkov results structure: ${JSON.stringify(Object.keys(results))}`);
+        const resultsArray = Array.isArray(results) ? results : [results];
+        for (const result of resultsArray) {
+            if (result.results && result.results.failed_checks) {
+                core.info(`DEBUG: Found ${result.results.failed_checks.length} failed checks in ${result.check_type || 'unknown'}`);
+                for (const check of result.results.failed_checks) {
+                    let severity = check.severity?.toLowerCase() || 'unknown';
+                    core.info(`DEBUG: Found failed check: ${check.check_id} with severity: ${severity}`);
+                    if (severity === 'unknown' || severity === 'null') {
+                        if (check.check_id === 'CKV_AWS_24') {
+                            severity = 'high';
+                        }
+                        else if (check.check_id === 'CKV_AWS_145') {
+                            severity = 'high';
+                        }
+                        else if (check.check_id === 'CKV_AWS_23') {
+                            severity = 'medium';
+                        }
+                        else {
+                            severity = 'medium';
+                        }
                     }
-                    else if (check.check_id === 'CKV_AWS_145') {
-                        severity = 'high';
+                    switch (severity) {
+                        case 'critical':
+                            critical++;
+                            break;
+                        case 'high':
+                            high++;
+                            break;
+                        case 'medium':
+                            medium++;
+                            break;
+                        case 'low':
+                            low++;
+                            break;
                     }
-                    else if (check.check_id === 'CKV_AWS_23') {
-                        severity = 'medium';
+                    if (findings.length < 10) {
+                        findings.push({
+                            check: check.check_id || 'Unknown',
+                            severity: severity.toUpperCase(),
+                            description: check.check_name || 'No description available',
+                            resource: check.resource || 'Unknown'
+                        });
                     }
-                    else {
-                        severity = 'medium';
-                    }
-                }
-                switch (severity) {
-                    case 'critical':
-                        critical++;
-                        break;
-                    case 'high':
-                        high++;
-                        break;
-                    case 'medium':
-                        medium++;
-                        break;
-                    case 'low':
-                        low++;
-                        break;
-                }
-                if (findings.length < 10) {
-                    findings.push({
-                        check: check.check_id || 'Unknown',
-                        severity: severity.toUpperCase(),
-                        description: check.check_name || 'No description available',
-                        resource: check.resource || 'Unknown'
-                    });
                 }
             }
         }

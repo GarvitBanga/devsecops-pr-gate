@@ -1,0 +1,72 @@
+name: Test DevSecOps PR Gate Action
+
+on:
+  pull_request:
+    paths: ['src/**', 'action.yml', 'examples/**']
+  push:
+    branches: [main]
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build action
+        run: npm run build
+
+      - name: Test Action with Security Issues (Should Fail)
+        id: test-with-issues
+        uses: ./
+        with:
+          paths-app: examples/app/
+          paths-iac: examples/infra/
+          fail-on: high
+          opa-policy-path: policies/conftest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Verify Action Detected Issues
+        run: |
+          echo "=== ACTION TEST RESULTS ==="
+          echo "Action outcome: ${{ steps.test-with-issues.outcome }}"
+          echo "Action conclusion: ${{ steps.test-with-issues.conclusion }}"
+          echo ""
+          echo "Action outputs:"
+          echo "  has-blockers: '${{ steps.test-with-issues.outputs.has-blockers }}'"
+          echo "  trivy-high: '${{ steps.test-with-issues.outputs.trivy-high }}'"
+          echo "  trivy-critical: '${{ steps.test-with-issues.outputs.trivy-critical }}'"
+          echo "  checkov-high: '${{ steps.test-with-issues.outputs.checkov-high }}'"
+          echo "  checkov-critical: '${{ steps.test-with-issues.outputs.checkov-critical }}'"
+          echo "  opa-deny-count: '${{ steps.test-with-issues.outputs.opa-deny-count }}'"
+          echo ""
+          
+          # The action should have detected security issues
+          if [ "${{ steps.test-with-issues.outputs.has-blockers }}" = "true" ]; then
+            echo " PASS: Action correctly detected security issues (has-blockers = true)"
+          else
+            echo " FAIL: Action did not detect security issues (has-blockers = ${{ steps.test-with-issues.outputs.has-blockers }})"
+            exit 1
+          fi
+          
+          # The action should have failed due to security issues
+          if [ "${{ steps.test-with-issues.outcome }}" = "failure" ]; then
+            echo " PASS: Action correctly failed when security issues were found"
+          else
+            echo " FAIL: Action should have failed but didn't (outcome = ${{ steps.test-with-issues.outcome }})"
+            exit 1
+          fi
+          
+          echo ""
+          echo " SUCCESS: DevSecOps PR Gate is working correctly!"
+          echo "It detected security issues and blocked the PR as expected." 

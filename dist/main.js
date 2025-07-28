@@ -44,23 +44,46 @@ const github_1 = require("./github");
 const summary_1 = require("./render/summary");
 async function run() {
     try {
-        const pathsApp = core.getInput('paths-app', { required: false }) || 'app/';
-        const pathsIac = core.getInput('paths-iac', { required: false }) || 'infra/';
-        const failOn = core.getInput('fail-on', { required: false }) || 'high';
-        const opaPolicyPath = core.getInput('opa-policy-path', { required: false }) || 'policies/conftest';
-        const trivyVersion = core.getInput('trivy-version', { required: false });
-        const checkovVersion = core.getInput('checkov-version', { required: false });
-        const conftestVersion = core.getInput('conftest-version', { required: false });
-        const trivyArgs = core.getInput('trivy-args', { required: false });
-        const checkovArgs = core.getInput('checkov-args', { required: false });
-        const conftestArgs = core.getInput('conftest-args', { required: false });
-        const commentTitle = core.getInput('comment-title', { required: false }) || 'DevSecOps PR Gate';
+        // Debug: Show all input-related environment variables
+        core.info('DEBUG: Checking input environment variables...');
+        Object.keys(process.env).forEach(key => {
+            if (key.startsWith('INPUT_')) {
+                core.info(`DEBUG: ${key} = ${process.env[key]}`);
+            }
+        });
+        const getInputWithFallback = (name, defaultValue = '') => {
+            const coreValue = core.getInput(name, { required: false });
+            if (coreValue !== '') {
+                return coreValue;
+            }
+            const envValue = process.env[`INPUT_${name.toUpperCase().replace(/-/g, '_')}`];
+            return envValue || defaultValue;
+        };
+        const pathsApp = getInputWithFallback('paths-app', 'app/');
+        const pathsIac = getInputWithFallback('paths-iac', 'infra/');
+        const failOn = getInputWithFallback('fail-on', 'high');
+        const opaPolicyPath = getInputWithFallback('opa-policy-path', 'policies/conftest');
+        const trivyVersion = getInputWithFallback('trivy-version', '');
+        const checkovVersion = getInputWithFallback('checkov-version', '');
+        const conftestVersion = getInputWithFallback('conftest-version', '');
+        const trivyArgs = getInputWithFallback('trivy-args', '');
+        const checkovArgs = getInputWithFallback('checkov-args', '');
+        const conftestArgs = getInputWithFallback('conftest-args', '');
+        const commentTitle = getInputWithFallback('comment-title', 'DevSecOps PR Gate');
         core.info('Starting DevSecOps PR Gate scan...');
+        core.info(`DEBUG: Current working directory: ${process.cwd()}`);
+        core.info(`DEBUG: App path: ${pathsApp}, IAC path: ${pathsIac}`);
+        core.info(`DEBUG: OPA policy path: ${opaPolicyPath}`);
+        // Check if paths exist
+        core.info(`DEBUG: App path exists: ${fs.existsSync(pathsApp)}`);
+        core.info(`DEBUG: IAC path exists: ${fs.existsSync(pathsIac)}`);
+        core.info(`DEBUG: OPA policy path exists: ${fs.existsSync(opaPolicyPath)}`);
         const trivyScanner = new trivy_1.TrivyScanner();
         const checkovScanner = new checkov_1.CheckovScanner();
         const conftestScanner = new conftest_1.ConftestScanner();
         const commentManager = new github_1.CommentManager();
         const summaryRenderer = new summary_1.SummaryRenderer();
+        core.info('DEBUG: Starting parallel scans...');
         const [trivyResults, checkovResults, opaResults] = await Promise.all([
             trivyScanner.scan(pathsApp, trivyVersion, trivyArgs),
             checkovScanner.scan(pathsIac, checkovVersion, checkovArgs),
