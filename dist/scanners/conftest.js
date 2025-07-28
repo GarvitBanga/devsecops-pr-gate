@@ -41,16 +41,18 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 class ConftestScanner {
-    async scan(path, policyPath, version, additionalArgs) {
+    async scan(terraformPath, policyPath, version, additionalArgs) {
         try {
-            core.info(`Running Conftest scan on: ${path} with policies: ${policyPath}`);
+            core.info(`Running Conftest scan on: ${terraformPath} with policies: ${policyPath}`);
             await this.ensureConftestInstalled(version);
             await this.ensureTerraformInstalled();
-            const jsonPath = await this.convertTerraformToJson(path);
+            const jsonPath = await this.convertTerraformToJson(terraformPath);
             const args = additionalArgs ? ` ${additionalArgs}` : '';
             const isJsonFile = jsonPath.endsWith('.json');
             const parser = isJsonFile ? 'json' : 'hcl2';
-            const command = `conftest test ${jsonPath} --policy ${policyPath} --parser ${parser} --output json${args}`;
+            const absoluteJsonPath = path.resolve(jsonPath);
+            const absolutePolicyPath = path.resolve(policyPath);
+            const command = `conftest test ${absoluteJsonPath} --policy ${absolutePolicyPath} --parser ${parser} --output json${args}`;
             core.info(`Executing: ${command}`);
             const { stdout } = await execAsync(command);
             const results = JSON.parse(stdout);

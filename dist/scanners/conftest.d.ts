@@ -1,5 +1,5 @@
 export declare class ConftestScanner {
-    scan(path: string, policyPath: string, version?: string, additionalArgs?: string): Promise<{
+    scan(terraformPath: string, policyPath: string, version?: string, additionalArgs?: string): Promise<{
         denyCount: number;
         findings: Array<{
             rule: string;

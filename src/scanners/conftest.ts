@@ -7,7 +7,7 @@ import * as path from 'path';
 const execAsync = promisify(exec);
 
 export class ConftestScanner {
-  async scan(path: string, policyPath: string, version?: string, additionalArgs?: string): Promise<{
+  async scan(terraformPath: string, policyPath: string, version?: string, additionalArgs?: string): Promise<{
     denyCount: number;
     findings: Array<{
       rule: string;
@@ -16,17 +16,20 @@ export class ConftestScanner {
     }>;
   }> {
     try {
-      core.info(`Running Conftest scan on: ${path} with policies: ${policyPath}`);
+      core.info(`Running Conftest scan on: ${terraformPath} with policies: ${policyPath}`);
 
       await this.ensureConftestInstalled(version);
       await this.ensureTerraformInstalled();
 
-      const jsonPath = await this.convertTerraformToJson(path);
+      const jsonPath = await this.convertTerraformToJson(terraformPath);
       
       const args = additionalArgs ? ` ${additionalArgs}` : '';
       const isJsonFile = jsonPath.endsWith('.json');
       const parser = isJsonFile ? 'json' : 'hcl2';
-      const command = `conftest test ${jsonPath} --policy ${policyPath} --parser ${parser} --output json${args}`;
+      
+      const absoluteJsonPath = path.resolve(jsonPath);
+      const absolutePolicyPath = path.resolve(policyPath);
+      const command = `conftest test ${absoluteJsonPath} --policy ${absolutePolicyPath} --parser ${parser} --output json${args}`;
 
       core.info(`Executing: ${command}`);
       const { stdout } = await execAsync(command);
