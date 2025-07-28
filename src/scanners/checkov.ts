@@ -51,7 +51,7 @@ export class CheckovScanner {
       core.info('Checkov is already installed');
     } catch {
       core.info('Installing Checkov...');
-      const checkovVersion = version || '3.1.0';
+      const checkovVersion = version || '3.3.0';
       
       try {
         await execAsync(`curl -L https://github.com/bridgecrewio/checkov/releases/download/${checkovVersion}/checkov-linux-x86_64 -o checkov`);
