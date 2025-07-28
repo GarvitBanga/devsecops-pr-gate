@@ -55,6 +55,30 @@ class ConftestScanner {
             const command = `conftest test ${absoluteJsonPath} --policy ${absolutePolicyPath} --parser ${parser} --output json${args}`;
             core.info(`Executing: ${command}`);
             try {
+                core.info('Testing conftest --version...');
+                const { stdout: versionOutput } = await execAsync('conftest --version');
+                core.info(`Conftest version: ${versionOutput.trim()}`);
+            }
+            catch (error) {
+                core.error(`Conftest version test failed: ${error}`);
+            }
+            try {
+                core.info('Testing file existence...');
+                const { stdout: lsOutput } = await execAsync(`ls -la ${absoluteJsonPath}`);
+                core.info(`JSON file details: ${lsOutput.trim()}`);
+            }
+            catch (error) {
+                core.error(`File existence test failed: ${error}`);
+            }
+            try {
+                core.info('Testing policy directory...');
+                const { stdout: policyLsOutput } = await execAsync(`ls -la ${absolutePolicyPath}`);
+                core.info(`Policy directory contents: ${policyLsOutput.trim()}`);
+            }
+            catch (error) {
+                core.error(`Policy directory test failed: ${error}`);
+            }
+            try {
                 const { stdout: whichOutput } = await execAsync('which conftest');
                 core.info(`Conftest binary location: ${whichOutput.trim()}`);
                 const { stdout: lsOutput } = await execAsync(`ls -la ${whichOutput.trim()}`);
