@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   test-action:
     runs-on: ubuntu-latest
@@ -24,9 +28,36 @@ jobs:
       - name: Build action
         run: npm run build
 
+      - name: Debug - Check built files
+        run: |
+          echo "=== CHECKING BUILT FILES ==="
+          ls -la dist/
+          echo "---"
+          echo "Checking main entry point:"
+          head -20 dist/index.js
+          echo "---"
+          echo "Checking if action.yml points to correct file:"
+          grep -A 5 "runs:" action.yml
+
+      - name: Debug - Check example files
+        run: |
+          echo "=== CHECKING EXAMPLE FILES ==="
+          echo "App directory:"
+          ls -la examples/app/
+          echo "---"
+          echo "Infra directory:"
+          ls -la examples/infra/
+          echo "---"
+          echo "App requirements:"
+          cat examples/app/requirements.txt
+          echo "---"
+          echo "Infra main.tf:"
+          head -20 examples/infra/main.tf
+
       - name: Test Action with Security Issues (Should Fail)
         id: test-with-issues
         uses: ./
+        continue-on-error: true
         with:
           paths-app: examples/app/
           paths-iac: examples/infra/
@@ -34,9 +65,9 @@ jobs:
           opa-policy-path: policies/conftest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
       - name: Verify Action Detected Issues
+        if: always()
         run: |
           echo "=== ACTION TEST RESULTS ==="
           echo "Action outcome: ${{ steps.test-with-issues.outcome }}"
@@ -50,6 +81,12 @@ jobs:
           echo "  checkov-critical: '${{ steps.test-with-issues.outputs.checkov-critical }}'"
           echo "  opa-deny-count: '${{ steps.test-with-issues.outputs.opa-deny-count }}'"
           echo ""
+          
+          # Test that outputs are set (not empty)
+          if [ -z "${{ steps.test-with-issues.outputs.has-blockers }}" ]; then
+            echo " FAIL: has-blockers output is empty - action may not have run properly"
+            exit 1
+          fi
           
           # The action should have detected security issues
           if [ "${{ steps.test-with-issues.outputs.has-blockers }}" = "true" ]; then

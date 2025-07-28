@@ -1,2 +1,2 @@
-export { run } from './main';
+export {};
 //# sourceMappingURL=index.d.ts.map

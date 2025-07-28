@@ -15,10 +15,9 @@ inputs:
     required: false
     default: 'infra/'
   fail-on:
-    description: 'Fail job if any finding >= this level'
+    description: 'Fail job if any finding >= this level (critical|high|off)'
     required: false
     default: 'high'
-    value: 'critical|high|off'
   opa-policy-path:
     description: 'Path to Rego policies for Conftest'
     required: false
