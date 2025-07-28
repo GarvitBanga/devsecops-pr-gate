@@ -1,0 +1,74 @@
+name: 'DevSecOps PR Gate'
+description: 'Blocks risky PRs by running Trivy, Checkov, and OPA/Conftest with a sticky PR summary'
+author: 'Your Organization'
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  paths-app:
+    description: 'Directory to scan with Trivy (filesystem)'
+    required: false
+    default: 'app/'
+  paths-iac:
+    description: 'Directory to scan with Checkov/OPA'
+    required: false
+    default: 'infra/'
+  fail-on:
+    description: 'Fail job if any finding >= this level'
+    required: false
+    default: 'high'
+    value: 'critical|high|off'
+  opa-policy-path:
+    description: 'Path to Rego policies for Conftest'
+    required: false
+    default: 'policies/conftest'
+  trivy-version:
+    description: 'Trivy version to install (default: latest stable)'
+    required: false
+    default: 'v0.48.0'
+  checkov-version:
+    description: 'Checkov version to install (default: latest stable)'
+    required: false
+    default: '3.1.0'
+  conftest-version:
+    description: 'Conftest version to install (default: latest stable)'
+    required: false
+    default: 'v0.45.0'
+  trivy-args:
+    description: 'Additional arguments to pass to Trivy'
+    required: false
+  checkov-args:
+    description: 'Additional arguments to pass to Checkov'
+    required: false
+  conftest-args:
+    description: 'Additional arguments to pass to Conftest'
+    required: false
+  comment-title:
+    description: 'Title for the sticky PR comment'
+    required: false
+    default: 'DevSecOps PR Gate'
+
+outputs:
+  comment-url:
+    description: 'URL of the created/updated PR comment'
+  trivy-high:
+    description: 'Number of HIGH severity findings from Trivy'
+  trivy-critical:
+    description: 'Number of CRITICAL severity findings from Trivy'
+  checkov-high:
+    description: 'Number of HIGH severity findings from Checkov'
+  checkov-critical:
+    description: 'Number of CRITICAL severity findings from Checkov'
+  opa-deny-count:
+    description: 'Number of policy violations from OPA/Conftest'
+  has-blockers:
+    description: 'Whether there are blocking findings (true|false)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
+permissions:
+  contents: read
+  pull-requests: write 

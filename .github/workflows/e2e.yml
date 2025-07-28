@@ -1,0 +1,53 @@
+name: End-to-End Tests
+
+on:
+  pull_request:
+    paths: ['src/**', 'action.yml', 'examples/**']
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build action
+        run: npm run build
+
+      - name: Test DevSecOps PR Gate
+        id: devsecops-pr-gate
+        uses: ./
+        with:
+          paths-app: examples/app/
+          paths-iac: examples/infra/
+          fail-on: high
+          opa-policy-path: policies/conftest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify outputs
+        run: |
+          echo "Comment URL: ${{ steps.devsecops-pr-gate.outputs.comment-url }}"
+          echo "Trivy High: ${{ steps.devsecops-pr-gate.outputs.trivy-high }}"
+          echo "Trivy Critical: ${{ steps.devsecops-pr-gate.outputs.trivy-critical }}"
+          echo "Checkov High: ${{ steps.devsecops-pr-gate.outputs.checkov-high }}"
+          echo "Checkov Critical: ${{ steps.devsecops-pr-gate.outputs.checkov-critical }}"
+          echo "OPA Deny Count: ${{ steps.devsecops-pr-gate.outputs.opa-deny-count }}"
+          echo "Has Blockers: ${{ steps.devsecops-pr-gate.outputs.has-blockers }}"
+          
+          if [ "${{ steps.devsecops-pr-gate.outputs.has-blockers }}" != "true" ]; then
+            echo "FAIL: Expected to find blockers in examples"
+            exit 1
+          fi
+          
+          echo "PASS: Test passed - found expected security issues" 
