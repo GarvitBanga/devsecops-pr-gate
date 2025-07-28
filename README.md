@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: DevSecOps PR Gate
-        uses: your-username/devsecops-pr-gate@v0.1
+        uses: GarvitBanga/devsecops-pr-gate@v0.1.0
         with:
           paths-app: 'app/'
           paths-iac: 'infra/'
@@ -30,6 +30,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+**The action installs Trivy, Checkov, and Conftest automatically—no extra setup.**
 
 ## Features
 
@@ -47,6 +49,8 @@ jobs:
 | `paths-iac` | Infrastructure directory | `infra/` |
 | `fail-on` | Block on: critical, high, off | `high` |
 | `opa-policy-path` | Policy directory | `policies/conftest` |
+
+**Note:** OPA runs on Terraform HCL via the hcl2 parser. Keep plan JSON out of the scanned folder or ignore *.json. Set `opa-policy-path` empty to skip OPA.
 
 ## Outputs
 
@@ -73,6 +77,8 @@ The action creates a sticky PR comment like this:
 - OPA: SSH access open to world
 
 *Merge blocked - findings ≥ high exist.*
+
+**If any findings ≥ fail-on (default high), the job fails to block the PR. Mark this job Required in Branch protection to enforce.**
 
 ## Development
 
