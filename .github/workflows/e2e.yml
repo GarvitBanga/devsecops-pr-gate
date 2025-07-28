@@ -24,6 +24,17 @@ jobs:
       - name: Build action
         run: npm run build
 
+      - name: Debug - Check built files
+        run: |
+          echo "=== CHECKING BUILT FILES ==="
+          ls -la dist/
+          echo "---"
+          echo "Checking main entry point:"
+          head -20 dist/index.js
+          echo "---"
+          echo "Checking if action.yml points to correct file:"
+          grep -A 5 "runs:" action.yml
+
       - name: Debug - Check files
         run: |
           echo "Checking example files..."
@@ -73,6 +84,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
+
+      - name: Test with minimal inputs
+        id: test-minimal
+        uses: ./
+        with:
+          paths-app: examples/app/
+          paths-iac: examples/infra/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Debug - Check minimal test outputs
+        if: always()
+        run: |
+          echo "=== MINIMAL TEST OUTPUTS ==="
+          echo "Minimal test outcome: ${{ steps.test-minimal.outcome }}"
+          echo "Minimal test conclusion: ${{ steps.test-minimal.conclusion }}"
+          echo "Minimal test outputs:"
+          echo "  has-blockers: '${{ steps.test-minimal.outputs.has-blockers }}'"
+          echo "  trivy-high: '${{ steps.test-minimal.outputs.trivy-high }}'"
+
+      - name: Debug - Check action logs
+        if: always()
+        run: |
+          echo "=== ACTION DEBUG INFO ==="
+          echo "Action step exit code: ${{ steps.devsecops-pr-gate.outcome }}"
+          echo "Action step conclusion: ${{ steps.devsecops-pr-gate.conclusion }}"
+          echo "All outputs:"
+          echo "  comment-url: '${{ steps.devsecops-pr-gate.outputs.comment-url }}'"
+          echo "  trivy-high: '${{ steps.devsecops-pr-gate.outputs.trivy-high }}'"
+          echo "  trivy-critical: '${{ steps.devsecops-pr-gate.outputs.trivy-critical }}'"
+          echo "  checkov-high: '${{ steps.devsecops-pr-gate.outputs.checkov-high }}'"
+          echo "  checkov-critical: '${{ steps.devsecops-pr-gate.outputs.checkov-critical }}'"
+          echo "  opa-deny-count: '${{ steps.devsecops-pr-gate.outputs.opa-deny-count }}'"
+          echo "  has-blockers: '${{ steps.devsecops-pr-gate.outputs.has-blockers }}'"
 
       - name: Debug - Check outputs
         run: |
