@@ -1,9 +1,11 @@
 package main
 
+required := {"owner","env"}
+
 deny[msg] {
-  input.planned_values.root_module.resources[_].type == "aws_instance"
-  resource := input.planned_values.root_module.resources[_]
-  resource.type == "aws_instance"
-  not resource.values.tags
-  msg := sprintf("Missing required tags (owner, env) on %s in resource %s", [resource.type, resource.address])
+  some rtype, name
+  res := input.resource[rtype][name]
+  missing := {k | k := required[_]; not res.tags[k]}
+  count(missing) > 0
+  msg := sprintf("Missing required tags %v on %s.%s", [missing, rtype, name])
 } 
