@@ -43,19 +43,17 @@ jobs:
           trivy fs --format json examples/app/ || echo "Trivy scan failed"
           
           echo "Testing Checkov installation..."
-          # Use a newer version of Checkov that doesn't have the cyclonedx issue
-          echo "Installing Checkov 3.3.0 (newer version)..."
-          curl -L https://github.com/bridgecrewio/checkov/releases/download/3.3.0/checkov-linux-x86_64 -o checkov
-          chmod +x checkov
-          sudo mv checkov /usr/local/bin/
+          # Use pip installation with 3.1.0 (which works)
+          echo "Installing Checkov via pip..."
+          pip install checkov==3.1.0
           checkov --version || echo "Checkov installation failed"
           
           echo "Testing Checkov scan..."
           checkov -d examples/infra/ --output json --output-file-path checkov-debug || echo "Checkov scan failed"
           
           echo "Testing Conftest installation..."
-          # Use a more reliable download method
-          wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_linux_x86_64.tar.gz
+          # Use a version that definitely exists
+          wget -O conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v0.44.0/conftest_linux_x86_64.tar.gz
           tar -xzf conftest.tar.gz
           sudo mv conftest /usr/local/bin/
           chmod +x /usr/local/bin/conftest

@@ -30,11 +30,11 @@ inputs:
   checkov-version:
     description: 'Checkov version to install (default: latest stable)'
     required: false
-    default: '3.3.0'
+    default: '3.1.0'
   conftest-version:
     description: 'Conftest version to install (default: latest stable)'
     required: false
-    default: 'v0.45.0'
+    default: 'v0.44.0'
   trivy-args:
     description: 'Additional arguments to pass to Trivy'
     required: false

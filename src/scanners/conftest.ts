@@ -43,9 +43,9 @@ export class ConftestScanner {
       core.info('Conftest is already installed');
     } catch {
       core.info('Installing Conftest...');
-      const conftestVersion = version || 'v0.45.0';
-      await execAsync(`curl -L -o conftest https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_linux_x86_64.tar.gz`);
-      await execAsync('tar xzf conftest_linux_x86_64.tar.gz');
+      const conftestVersion = version || 'v0.44.0';
+      await execAsync(`curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/${conftestVersion}/conftest_linux_x86_64.tar.gz`);
+      await execAsync('tar xzf conftest.tar.gz');
       await execAsync('sudo mv conftest /usr/local/bin/');
       await execAsync('chmod +x /usr/local/bin/conftest');
     }
