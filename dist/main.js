@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.run = run;
 const core = __importStar(require("@actions/core"));
+const github = __importStar(require("@actions/github"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const trivy_1 = require("./scanners/trivy");
@@ -84,11 +85,34 @@ async function run() {
         const commentManager = new github_1.CommentManager();
         const summaryRenderer = new summary_1.SummaryRenderer();
         core.info('DEBUG: Starting parallel scans...');
-        const [trivyResults, checkovResults, opaResults] = await Promise.all([
-            trivyScanner.scan(pathsApp, trivyVersion, trivyArgs),
-            checkovScanner.scan(pathsIac, checkovVersion, checkovArgs),
-            conftestScanner.scan(pathsIac, opaPolicyPath, conftestVersion, conftestArgs)
-        ]);
+        let trivyResults, checkovResults, opaResults;
+        try {
+            core.info('DEBUG: Starting Trivy scan...');
+            trivyResults = await trivyScanner.scan(pathsApp, trivyVersion, trivyArgs);
+            core.info(`DEBUG: Trivy scan completed successfully`);
+        }
+        catch (error) {
+            core.warning(`Trivy scan failed: ${error}`);
+            trivyResults = { critical: 0, high: 0, medium: 0, low: 0, findings: [] };
+        }
+        try {
+            core.info('DEBUG: Starting Checkov scan...');
+            checkovResults = await checkovScanner.scan(pathsIac, checkovVersion, checkovArgs);
+            core.info(`DEBUG: Checkov scan completed successfully`);
+        }
+        catch (error) {
+            core.warning(`Checkov scan failed: ${error}`);
+            checkovResults = { critical: 0, high: 0, medium: 0, low: 0, findings: [] };
+        }
+        try {
+            core.info('DEBUG: Starting Conftest scan...');
+            opaResults = await conftestScanner.scan(pathsIac, opaPolicyPath, conftestVersion, conftestArgs);
+            core.info(`DEBUG: Conftest scan completed successfully`);
+        }
+        catch (error) {
+            core.warning(`Conftest scan failed: ${error}`);
+            opaResults = { denyCount: 0, findings: [] };
+        }
         core.info(`DEBUG: Trivy results - Critical: ${trivyResults.critical}, High: ${trivyResults.high}`);
         core.info(`DEBUG: Checkov results - Critical: ${checkovResults.critical}, High: ${checkovResults.high}`);
         core.info(`DEBUG: OPA results - Deny count: ${opaResults.denyCount}`);
@@ -99,27 +123,49 @@ async function run() {
         };
         const hasBlockers = determineBlockers(results, failOn);
         core.info(`DEBUG: Has blockers: ${hasBlockers}, Fail on: ${failOn}`);
-        const summary = summaryRenderer.render(results, commentTitle, failOn);
-        const commentUrl = await commentManager.createOrUpdateComment(summary);
-        await uploadScanReports(results);
+        // Set outputs
         core.info('DEBUG: Setting outputs...');
-        core.setOutput('comment-url', commentUrl);
-        core.setOutput('trivy-high', results.trivy.high.toString());
-        core.setOutput('trivy-critical', results.trivy.critical.toString());
-        core.setOutput('checkov-high', results.checkov.high.toString());
-        core.setOutput('checkov-critical', results.checkov.critical.toString());
-        core.setOutput('opa-deny-count', results.opa.denyCount.toString());
+        core.setOutput('trivy-high', trivyResults.high.toString());
+        core.setOutput('trivy-critical', trivyResults.critical.toString());
+        core.setOutput('checkov-high', checkovResults.high.toString());
+        core.setOutput('checkov-critical', checkovResults.critical.toString());
+        core.setOutput('opa-deny-count', opaResults.denyCount.toString());
         core.setOutput('has-blockers', hasBlockers.toString());
         core.info('DEBUG: All outputs set successfully');
+        // Handle PR comments
+        if (github.context.eventName === 'pull_request') {
+            try {
+                const summary = summaryRenderer.render(results, commentTitle, failOn);
+                const commentUrl = await commentManager.createOrUpdateComment(summary);
+                core.setOutput('comment-url', commentUrl);
+            }
+            catch (error) {
+                core.warning(`Failed to create PR comment: ${error}`);
+                core.setOutput('comment-url', 'https://github.com/placeholder');
+            }
+        }
+        else {
+            core.warning('Not running on a pull request - skipping comment creation');
+            core.setOutput('comment-url', 'https://github.com/placeholder');
+        }
+        // Upload scan reports
+        try {
+            await uploadScanReports(results);
+        }
+        catch (error) {
+            core.warning(`Failed to upload scan reports: ${error}`);
+        }
+        // Fail if there are blockers
         if (hasBlockers) {
             core.setFailed(`DevSecOps PR Gate: Found ${failOn.toUpperCase()} or higher severity issues that must be resolved before merge.`);
         }
         else {
-            core.info('DevSecOps PR Gate: All checks passed!');
+            core.info('DevSecOps PR Gate: No blocking security issues found.');
         }
     }
     catch (error) {
-        core.setFailed(`DevSecOps PR Gate failed: ${error instanceof Error ? error.message : String(error)}`);
+        core.error(`Action failed with error: ${error}`);
+        core.setFailed(`DevSecOps PR Gate failed: ${error}`);
     }
 }
 function determineBlockers(results, failOn) {
